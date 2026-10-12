@@ -19,7 +19,7 @@ steps:
     with:
       packages: "platform-tools platforms;android-33 build-tools;33.0.2"
 
-  - name: Install system dependencies
+  - name: Install dependencies
     run: |
       sudo apt-get update
       sudo apt-get install -y python3-pip git zip unzip \
@@ -29,12 +29,11 @@ steps:
 
   - name: Install Buildozer
     run: |
-      python3 -m pip install --user buildozer cython==0.29.36
+      python3 -m pip install --user --break-system-packages buildozer cython==0.29.36
       echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
   - name: Build APK
-    run: |
-      buildozer -v android debug
+    run: buildozer -v android debug
 
   - name: Upload APK
     uses: actions/upload-artifact@v4
