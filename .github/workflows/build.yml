@@ -1,39 +1,48 @@
+
 name: Build Android APK
 
 on:
-workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
-build:
-runs-on: ubuntu-22.04
-steps:
-- uses: actions/checkout@v4
+  build:
+    runs-on: ubuntu-22.04
 
-  - uses: actions/setup-java@v4
-    with:
-      distribution: temurin
-      java-version: "17"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-  - uses: android-actions/setup-android@v3
-    with:
-      packages: "platform-tools platforms;android-33 build-tools;33.0.2"
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
 
-  - name: Install dependencies
-    run: |
-      sudo apt-get update
-      sudo apt-get install -y python3-pip git zip unzip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev cmake libffi-dev libssl-dev automake
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-33 build-tools;33.0.2"
 
-  - name: Install Buildozer
-    run: |
-      python3 -m pip install --user --break-system-packages buildozer cython==0.29.36
-      echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3-pip git zip unzip lld \
+            autoconf libtool libltdl-dev pkg-config \
+            zlib1g-dev libncurses5-dev libncursesw5-dev \
+            cmake libffi-dev libssl-dev automake
 
-  - name: Build APK
-    run: buildozer -v android debug
+      - name: Install Buildozer
+        run: |
+          python3 -m pip install --user --break-system-packages buildozer cython==0.29.36
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-  - name: Upload APK
-    uses: actions/upload-artifact@v4
-    with:
-      name: calculator-apk
-      path: bin/*.apk
-      if-no-files-found: error
+      - name: Build APK
+        run: buildozer -v android debug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: calculator-apk
+          path: bin/*.apk
+          if-no-files-found: error
