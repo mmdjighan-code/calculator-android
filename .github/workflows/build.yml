@@ -1,48 +1,174 @@
 
-name: Build Android APK
 
-on:
-  workflow_dispatch:
+root = tk.Tk()
+root.title("Pro Calculator")
+root.geometry("1000x800")
+root.configure(bg="#151923")
 
-jobs:
-  build:
-    runs-on: ubuntu-22.04
+expression = tk.StringVar()
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+ops = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.Mod: operator.mod,
+    ast.USub: operator.neg,
+    ast.UAdd: operator.pos,
+}
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: "platform-tools platforms;android-33 build-tools;33.0.2"
+def safe_calculate(expr):
+    def evaluate(node):
+        if isinstance(node, ast.Expression):
+            return evaluate(node.body)
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            python3-pip git zip unzip lld \
-            autoconf libtool libltdl-dev pkg-config \
-            zlib1g-dev libncurses5-dev libncursesw5-dev \
-            cmake libffi-dev libssl-dev automake
+        if isinstance(node, ast.Constant) and type(node.value) in (int, float):
+            return node.value
 
-      - name: Install Buildozer
-        run: |
-          python3 -m pip install --user --break-system-packages buildozer cython==0.29.36
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        if isinstance(node, ast.BinOp) and type(node.op) in ops:
+            return ops[type(node.op)](
+                evaluate(node.left),
+                evaluate(node.right)
+            )
 
-      - name: Build APK
-        run: buildozer -v android debug
+        if isinstance(node, ast.UnaryOp) and type(node.op) in ops:
+            return ops[type(node.op)](evaluate(node.operand))
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: calculator-apk
-          path: bin/*.apk
-          if-no-files-found: error
+        raise ValueError("Invalid expression")
+
+    return evaluate(ast.parse(expr, mode="eval"))
+
+
+def press(value):
+    current = expression.get()
+
+    if value == "C":
+        expression.set("")
+    elif value == "⌫":
+        expression.set(current[:-1])
+    elif value == "=":
+        try:
+            result = safe_calculate(current)
+            if isinstance(result, float) and result.is_integer():
+                result = int(result)
+            history.insert(tk.END, f"{current} = {result}")
+            expression.set(str(result))
+        except Exception:
+            expression.set("Error")
+    elif value == "%":
+        expression.set(current + "/100")
+    else:
+        expression.set(current + value)
+
+
+display = tk.Entry(
+    root,
+    textvariable=expression,
+    font=("Arial", 42),
+    bg="#222938",
+    fg="white",
+    insertbackground="white",
+    justify="right",
+    relief="flat"
+)
+display.pack(fill="x", padx=20, pady=20, ipady=15)
+
+tk.Label(
+    root,
+    text="HISTORY",
+    font=("Arial", 16, "bold"),
+    bg="#151923",
+    fg="#9CA9C9"
+).pack(anchor="w", padx=20)
+
+history = tk.Listbox(
+    root,
+    height=2,
+    font=("Arial", 16),
+    bg="#222938",
+    fg="white",
+    relief="flat"
+)
+history.pack(fill="x", padx=20, pady=(5, 15))
+
+
+def use_history(event):
+    selected = history.curselection()
+    if selected:
+        item = history.get(selected[0])
+        expression.set(item.split(" = ")[-1])
+
+
+history.bind("<<ListboxSelect>>", use_history)
+
+frame = tk.Frame(root, bg="#151923")
+frame.pack(fill="both", expand=True, padx=12, pady=10)
+
+buttons = [
+    ["C", "(", ")", "⌫"],
+    ["7", "8", "9", "/"],
+    ["4", "5", "6", "*"],
+    ["1", "2", "3", "-"],
+    ["%", "0", ".", "+"],
+    ["="]
+]
+
+
+def make_button(text, row, col, colspan=1):
+    color = (
+        "#D94F70" if text == "C"
+        else "#536DFE" if text == "="
+        else "#394A78" if text in ("/", "*", "-", "+", "%")
+        else "#293247"
+    )
+
+    button = tk.Button(
+        frame,
+        text=text,
+        font=("Arial", 30, "bold"),
+        fg="white",
+        bg=color,
+        activebackground="#46536D",
+        activeforeground="white",
+        relief="flat",
+        bd=0,
+        command=lambda: press(text)
+    )
+
+    button.grid(
+        row=row,
+        column=col,
+        columnspan=colspan,
+        sticky="nsew",
+        padx=7,
+        pady=7,
+        ipadx=10,
+        ipady=10
+    )
+
+
+for r, row in enumerate(buttons):
+    if row == ["="]:
+        make_button("=", r, 0, 4)
+    else:
+        for c, value in enumerate(row):
+            make_button(value, r, c)
+
+for c in range(4):
+    frame.grid_columnconfigure(c, weight=1, uniform="columns")
+
+for r in range(6):
+    frame.grid_rowconfigure(r, weight=1, uniform="rows")
+
+display.bind(
+    "<Return>",
+    lambda event: press("=")
+)
+
+display.bind(
+    "<Escape>",
+    lambda event: press("C")
+)
+
+root.mainloop()
